@@ -26,6 +26,10 @@ const config = {
 async function main() {
 	console.log("Delta Make v%s", config.version);
 
+	config.args = ParseArgs();
+	if (config.args == null)
+		return -1;
+
 	config.startPath = process.cwd();
 	if (config.startPath == null)
 		return -1;
@@ -41,8 +45,6 @@ async function main() {
 		console.error("ERROR: Confusion. File \"solution.json\" and \"project.json\" exist in same directory. Abort");
 		return -1;
 	}
-
-	config.args = ParseArgs();
 
 	if (bProjectConfig == true) {
 		console.log("Project mode...");
@@ -90,6 +92,30 @@ async function main() {
 }
 
 /**
+ * PrintHelp
+ */
+function PrintHelp() {
+	let tmp = "";
+	tmp += "Usage:\n";
+	tmp += "    deltamake [flags] [build1, build2, ...]\n";
+	tmp += "Note:\n";
+	tmp += "    If build names are not specified, the \"default\" build name will be used.\n";
+	tmp += "flags:\n";
+	tmp += "    -h --help\n";
+	tmp += "        Show this help text\n";
+	tmp += "    -f --force\n";
+	tmp += "        Force rebuild all solutions (ignore all pre-builds)\n";
+	tmp += "    -n --no-build\n";
+	tmp += "        Don't build anything (useful with scan flag)\n";
+	tmp += "    -s --scan <code> <headers>\n";
+	tmp += "        Scan scanPath for files with specified extensions and save to files and headers lists\n";
+	tmp += "        Example usage:\n";
+	tmp += "            deltamake -n -s .cpp .h\n";
+
+	console.log(tmp);
+}
+
+/**
  * ParseArgs
  */
 function ParseArgs() {
@@ -106,17 +132,17 @@ function ParseArgs() {
 		if (process.argv[i].startsWith("-")) {
 			switch (process.argv[i].slice(1)) {
 				case "h":
-				case "help":
-					
+				case "-help":
+					PrintHelp();
 					return null;
 				case "f":
-				case "force":
+				case "-force":
 					args.bForce = true;
 					break;
 				case "s":
-				case "scan":
+				case "-scan":
 					if ((i + 3) > process.argv.length) {
-						console.error("not enough arguments to scan. Abort");
+						console.error("Not enough arguments to scan. Use -h flag for help. Abort");
 						return null;
 					}
 					
@@ -125,12 +151,13 @@ function ParseArgs() {
 
 					args.bScan = true;
 					break;
+				case "n":
 				case "-no-build":
 					args.bNoBuild = true;
 					break;
 
 				default:
-					console.error("Unknown flag \"%s\". Abort", process.argv[i]);
+					console.error("Unknown flag \"%s\". Use -h flag for help. Abort", process.argv[i]);
 					return null;
 			}
 		}
@@ -475,11 +502,11 @@ function CompileObject(buildName, sc) {
 	//console.log("Compiling \"%s\"...", name);
 
 	let command = build.compiler + " " + build.compilerFlags;
-	build.includePaths.forEach((path) => { command += " -I" + path; });
-	build.libPaths.forEach((path) => { command += " -L" + path; });
-	build.defines.forEach((def) => { command += " -D" + def; });
+	build.includePaths.forEach((path) => { command += " -I\"" + path + "\""; });
+	build.libPaths.forEach((path) => { command += " -L\"" + path + "\""; });
+	build.defines.forEach((def) => { command += " -D\"" + def + "\""; });
 
-	command += " -c " + path + " -o " + config.solution.tmpPath + buildName + "_" + name;
+	command += " -c \"" + path + "\" -o \"" + config.solution.tmpPath + buildName + "_" + name + "\"";
 	System(command);
 }
 
@@ -490,10 +517,10 @@ function LinkExec(buildName, objects) {
 	const build = config.solution.builds[buildName];
 	let command = build.linker + " " + build.linkerFlags;
 
-	objects.forEach((obj) => { command += " " + config.solution.tmpPath + buildName + "_" + obj; });
+	objects.forEach((obj) => { command += " \"" + config.solution.tmpPath + buildName + "_" + obj + "\""; });
 	build.staticLibs.forEach((lib) => { command += " " + lib; });
 		
-	command += " -o " + config.solution.buildPath + build.outname;
+	command += " -o \"" + config.solution.buildPath + build.outname + "\"";;
 	System(command);
 }
 
