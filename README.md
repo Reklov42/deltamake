@@ -1,3 +1,6 @@
+> [!CAUTION]
+> Node.JS implenestation is deprecated and no longer supported
+
 # DeltaMake
 
 Project and solution builder with JSON-based configuration files for my C/C++ projects.
@@ -10,15 +13,19 @@ If build names are not specified, the "default" build name will be used.
 
 ### Flags
 
-`-h --help`
+`-h --help`<br>
 Show help text
-`-f --force`
+
+`-f --force`<br>
 Force rebuild all solutions (ignore all pre-builds)
+
 `-n --no-build`
 Don't build anything (useful with scan flag)
-`-s --scan <code> <headers>`
+
+`-s --scan <code> <headers>`<br>
 Scan `scanPath` for files with specified extensions and save to files and headers lists
-Example usage:
+
+Example usage:<br>
 `deltamake -n -s .cpp .h`
 
 ## Example project tree
@@ -68,12 +75,12 @@ TestProjext
 }
 ```
 
-`solutions`
+`solutions`<br>
 list of solutions pairs `"codename": "path"`
 
-`builds`
+`builds`<br>
 list of build configurations with structure:
-> `solutions`
+> `solutions`<br>
 > list of solution codenames
 
 ## Solution configuration file
@@ -124,46 +131,58 @@ list of build configurations with structure:
 }
 ```
 
-`scanPath`
+`scanPath`<br>
 path for `-s`/`--scan` option
-`buildPath`
+
+`buildPath`<br>
 path for build output
-`tmpPath`
+
+`tmpPath`<br>
 path for tmp objects
-`files`
+
+`files`<br>
 list of found code files
-`headers`
+
+`headers`<br>
 list of found header files
 
-`builds`
+`builds`<br>
 list of build configurations with one of structure:
-> `type`
+> `type`<br>
 > type of build configuration. Can be:
 >
-> * `exec`
+> * `exec`<br>
 > build as executable
-> * `lib`
+>
+> * `lib`<br>
 > build as library
 >
-> `includePaths`
+> `includePaths`<br>
 > list of include paths
-> `libPaths`
+> 
+> `libPaths`<br>
 > list of paths to libraries
-> `defines`
+> 
+> `defines`<br>
 > list of global defines names
-> `compiler`
+> 
+> `compiler`<br>
 > used compiler
-> `compilerFlags`
+> 
+> `compilerFlags`<br>
 > string of flags for compiler
-> `staticLibs`
+> 
+> `staticLibs`<br>
 > list of static library names
-> `outname`
+> 
+> `outname`<br>
 > name of output build
 >
-> if `type` is `exec`:
-> > `linker`
-> > used linker
-> > `linkerFlags`
+> if `type` is `exec`:<br>
+> > `linker`<br>
+> > used linker<br>
+> >
+> > `linkerFlags`<br>
 > > string of flags for linker
 >
 > if `type` is `lib`:
