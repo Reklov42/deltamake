@@ -1,171 +1,248 @@
 # DeltaMake
 
-Project and solution builder with JSON-based configuration files for my C/C++ projects.
+Project and solution builder with JSON-based configuration files for my projects.
+
+* [Usage](#usage)
+* [Flags](#flags)
+* [Example project tree](#example-project-tree)
+* [Configuration file](#configuration-file)
+* * [Common data](#common-data)
+* * [`builds.<name>` structure](#buildsname-structure)
+* * [`builds.<name>.solutions.<name>` structure](#buildsnamesolutionsname-structure)
+* [Solution types](#solution-types)
+* [Build types](#build-types)
+* [Example](#example)
 
 ## Usage
 
 `deltamake [flags] [build1, build2, ...]`
 
-If build names are not specified, the "default" build name will be used.
+> If build names are not specified, the `default` build name will be used.
 
-### Flags
+`deltamake -f default debug`
+
+## Flags
 
 `-h --help`
+
 Show help text
+
 `-f --force`
+
 Force rebuild all solutions (ignore all pre-builds)
+
 `-n --no-build`
+
 Don't build anything (useful with scan flag)
-`-s --scan <code> <headers>`
-Scan `scanPath` for files with specified extensions and save to files and headers lists
-Example usage:
-`deltamake -n -s .cpp .h`
+
+`-v --verbose`
+
+Enable verbose logging
+
+`-s --scan`
+
+Scan `scanPath` for files with specified extensions
+
+`-w <count> --workers <count>`
+
+Max number workers (`max(cpu_cores, <count>)`)
 
 ## Example project tree
 
-Single solution:
-
 ```text
-TestSolution
+Solution
+├─ SubSolution1
+│  ├─ SomeFolder
+│  └─ solution.json
+├─ SubSolution2
+│  ├─ SomeFolder
+│  └─ solution.json
 ├─ build
 │  └─ tmp
+├─ libraries
+│  ├─ lib1
+│  └─ lib2
 ├─ source
 │  ├─ main.cpp
 │  └─ main.h
 └─ solution.json
 ```
 
-Project with multiple solutions:
+## Configuration file
 
-```text
-TestProjext
-├─ TestSolution1
-│  ├─ SomeFolder
-│  └─ solution.json
-├─ TestSolution2
-│  ├─ SomeFolder
-│  └─ solution.json
-└─ project.json
-```
+Configuration file: `solution.json`
 
-## Project configuration file
+DeltaMake can autocomplete some of the parameters such as `type`, or understands different (`path.sourses` can be `string` or `list of strings`)
+
+-----
+
+Temporary diff file: `deltamake.json`
+
+Stores differential data between builds, so just `.gitignore` it
+
+### Common data
+
+| Name            | Values                         | Description                       |
+|:--------------- |:------------------------------ |:--------------------------------- |
+| `varsion`       | `3.0.0` or later               |                                   |
+| `type`          | `default` or `none`            | [Solution types](#solution-types) |
+| `paths.scan`    |                                | Path for `-s`/`--scan` option     |
+| `paths.sourses` | `string` or `list of stsrings` | Path to source files              |
+| `paths.build`   |                                | Path for build output             |
+| `paths.tmp`     |                                | Path for tmp objects              |
+| `solutions`     | `list of "codename": "path"`   | List of solutions pairs           |
+| `builds`        |                                | List of build configurations with |
+| `builds.<name>` |                                | Build configurations `<name>`     |
+
+### `builds.<name>` structure
+
+| Name                | Values                   | Description                   |
+|:------------------- |:------------------------ |:----------------------------- |
+| `.type`             | `exec`, if not specified | [Build types](#build-types)   |
+| `.paths.include`    |                          | List of `include` paths       |
+| `.paths.lib`        |                          | List of paths to libraries    |
+| `.defines`          |                          | List of global defines names  |
+| `.compiler`         | `g++`, If not specified  | Used compiler                 |
+| `.compilerFlags`    |                          | String of flags for compiler  |
+| `.staticLibs`       |                          | List of static library names  |
+| `.outname`          |                          | Name of output build          |
+| `.pre`              |                          | Pre build shell command       |
+| `.post`             |                          | Post build shell command      |
+| `.solutions.<name>` |                          | List of subsolution codenames |
+
+### `builds.<name>.solutions.<name>` structure
+
+| Name        | Values                      | Description             |
+|:----------- |:--------------------------- |:----------------------- |
+| `.build`    | `default`, If not specified | Subsolution build name  |
+| `.defines`  |                             | Override all defines    |
+| `.+defines` |                             | Additional defines      |
+| `.-defines` |                             | Remove selected defines |
+
+## Solution types
+
+Solution with specified types has automatic features such as header tree for advanced compilation (`"c/cpp"`)<!-- or SDK autobuild (`"pico"`)-->:
+
+### `default` (can be unspecified)
+
+Just build it, dude. Wizardry is not included
+
+### `c/cpp`
+
+Autoscan source files for header checking
+
+> Adds `c/cpp` object
+
+| Name             | Values          | Description                          |
+|:---------------- |:--------------- |:------------------------------------ |
+| `.headers`       | (autogenerated) | List of found header files           |
+<!--| `.required`      |                 | list of requirements                 |
+| `.required.libs` |                 | list of required installed libraries |-->
+
+<!-- SOON :) MAYBE XD
+* `pico`
+  
+    Autobuild pico SDK for solution
+-->
+
+## Build types
+
+### `exec`
+
+Build as executable
+
+| Name          | Values                  | Description                |
+|:------------- |:----------------------- |:-------------------------- |
+| `linker`      | `g++`, if not specified | Used linker                |
+| `linkerFlags` |                         | String of flags for linker |
+
+### `lib`
+
+Build as static library
+
+| Name       | Values                 | Description   |
+|:---------- |:---------------------- |:------------- |
+| `archiver` | `ar`, if not specified | Used archiver |
+
+<!--### `dll` SOON :D
+
+Build as shared/dynamic library-->
+
+## Example
 
 ```json
 {
-    "version": "2.1.0",
+    "version": "3.0.0",
+    "type": "c/cpp",
+    "paths": {
+        "scan": [ "source/" ],
+        "build": "build/",
+        "tmp": "tmp/"
+    },
     "solutions": {
         "ts1": "TestSolution1",
         "ts2": "TestSolution2"
     },
-    "builds": {
-        "default": {
-            "solutions": [ "ts1" ]
-        },
-        "buildAll": {
-            "solutions": [ "ts1", "ts2" ]
-        }
-    }
-}
-```
-
-`solutions`
-list of solutions pairs `"codename": "path"`
-
-`builds`
-list of build configurations with structure:
-> `solutions`
-> list of solution codenames
-
-## Solution configuration file
-
-```json
-{
-    "version": "2.1.0",
-    "scanPath": "source/",
-    "buildPath": "build/",
-    "tmpPath": "build/tmp/",
     "files": [
-        "source/main.cpp",
+        "source/main.cpp"
     ],
-    "headers": [
-        "source/main.h"
-    ],
+    "c/cpp": {
+        "headers": { "source/main.h": [ "source/main.cpp" ] },
+        "requiredLibs": [ "libm" ]
+    },
     "builds": {
         "default": {
             "type": "exec",
-            "includePaths": [
-                "source/",
-            ],
-            "libPaths": [],
-            "defines": [],
-            "compiler": "g++",
+            "solutions": {
+                "test": {
+                    "build": "lib",
+                    "+defines": [ "__TEST__" ]
+                },
+                "<NAME>": { ... }
+            },
+            "paths": {
+                "include": [
+                    "source/",
+                    "libraries/"
+                ],
+                "lib": [
+                    "libraries/"
+                ]
+            },
+            "defines": [ "__TEST_DEFINE__" ],
             "compilerFlags": "-O2 -std=c++17 -lm",
-            "linker": "g++",
             "linkerFlags": "-O2 -std=c++17 -lm",
-            "staticLibs": [],
+            "staticLibs": [
+                "libraries/lib1/lib1.a"
+            ],
             "outname": "project"
+        },
+        "JustBuildSubs": {
+            "solutions": {
+                "ts1": { },
+                "ts2": { }
+            }
         },
         "lib": {
             "type": "lib",
-            "includePaths": [
-                "source/"
-            ],
-            "libPaths": [],
+            "paths": {
+                "include": [
+                    "source/"
+                ],
+                "lib": [ ]
+            },
             "defines": [
                 "__SOME_LIB__"
             ],
             "compiler": "gcc",
-            "compilerFlags": "-O2 -std=gnu99",
+            "compilerFlags": "-O2 -std=gnu99 -lm",
             "archiver": "ar",
             "staticLibs": [],
             "outname": "lib.a"
+        },
+        "<NAME>": {
+            ...
         }
     }
 }
 ```
-
-`scanPath`
-path for `-s`/`--scan` option
-`buildPath`
-path for build output
-`tmpPath`
-path for tmp objects
-`files`
-list of found code files
-`headers`
-list of found header files
-
-`builds`
-list of build configurations with one of structure:
-> `type`
-> type of build configuration. Can be:
->
-> * `exec`
-> build as executable
-> * `lib`
-> build as library
->
-> `includePaths`
-> list of include paths
-> `libPaths`
-> list of paths to libraries
-> `defines`
-> list of global defines names
-> `compiler`
-> used compiler
-> `compilerFlags`
-> string of flags for compiler
-> `staticLibs`
-> list of static library names
-> `outname`
-> name of output build
->
-> if `type` is `exec`:
-> > `linker`
-> > used linker
-> > `linkerFlags`
-> > string of flags for linker
->
-> if `type` is `lib`:
-> > `archiver`
-> > used archiver
