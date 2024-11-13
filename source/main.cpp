@@ -38,8 +38,9 @@ struct SConfig {
 	bool								bVerbose								= false;
 	bool								bNoBuild								= false;
 	bool								bScan									= false;
+	bool								bForce									= false;
 
-	size_t								nMaxWorkers								= -1;
+	size_t								nMaxWorkers								= 0;
 	size_t								nCores									= 1;
 } config;
 
@@ -205,7 +206,7 @@ int main(int argc, char* argv[]) {
 
 		sigaction(SIGINT, &intHandler, &config.oldHandler);
 
-		config.pool.Start(config.nCores);
+		config.pool.Start(config.nMaxWorkers);
 	}
 
 	for (size_t i = 0; i < config.builds.size(); ++i)
@@ -248,7 +249,7 @@ void ParseArgs(CArgStream&& stream) {
 				}
 
 				config.nMaxWorkers = static_cast<size_t>(atoll(stream.GetCurret()));
-				config.nMaxWorkers = (config.nMaxWorkers == 0) ? -1 : config.nMaxWorkers;
+				config.nMaxWorkers = (config.nMaxWorkers == 0) ? 1 : config.nMaxWorkers;
 			}
 			else if (CheckArg(arg, "help"))
 				PrintHelp();
@@ -282,7 +283,7 @@ void PrintHelp() { // TODO: force
 		"    -n --no-build\n" \
 		"        Don't build anything (useful with scan flag)\n";
 		"    -w <count> --workers <count>\n" \
-		"        Max number workers (max(cpu_cores, <count>))\n";
+		"        Max number of workers\n";
 
 	terminal->Log(LOG_INFO, "%s\n", help);
 }
@@ -338,7 +339,9 @@ void Init() {
 	config.nCores = (config.nCores == 0) ? 1 : config.nCores;
 	terminal->Log(LOG_DETAIL, "CPU Cores:   %zu\n", config.nCores);
 
-	config.nCores = (config.nMaxWorkers < config.nCores) ? config.nMaxWorkers : config.nCores;
+	if (config.nMaxWorkers == 0)
+		config.nMaxWorkers = config.nCores;
+	
 	terminal->Log(LOG_DETAIL, "CPU Workers: %zu\n", config.nCores);
 }
 

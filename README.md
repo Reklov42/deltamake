@@ -45,7 +45,7 @@ Scan `scanPath` for files with specified extensions
 
 `-w <count> --workers <count>`
 
-Max number workers (`max(cpu_cores, <count>)`)
+Max number of workers
 
 ## Example project tree
 

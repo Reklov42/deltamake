@@ -28,7 +28,7 @@ namespace DeltaMake {
 	 * Command
 	 */
 	struct SCommand {
-		char							title[DELTAMAKE_MAX_WORKER_TITLE]		= { "Waiting for the command..." };
+		char							title[DELTAMAKE_MAX_WORKER_TITLE]		= { " " /* "Waiting for the command..." */ };
 		std::string						command;
 	};
 
@@ -38,10 +38,10 @@ namespace DeltaMake {
 	struct SWorker {
 		std::mutex						mutex;
 		SCommand						command;
-		std::atomic_bool				bRunning;
+		std::atomic_bool				bRunning								= true;
 	};
 
-	/**
+	/**                                 
 	 * Thread pool of workers
 	 */
 	class CWorkerPool : public IWorkerPool {
@@ -66,7 +66,7 @@ namespace DeltaMake {
 			std::vector<std::thread>	m_threads;
 
 			std::queue<SCommand>		m_commands;
-
+			std::atomic_size_t			m_nExecuted								= 0;
 	};
 }
 
@@ -101,6 +101,8 @@ inline bool DeltaMake::CWorkerPool::AddCommand(const std::string& command, const
  * DeltaMake::CWorkerPool::Start
  */
 inline int DeltaMake::CWorkerPool::Start(size_t nWorkers) {
+	terminal->Log(LOG_INFO, "\r\n\n");
+	
 	const size_t nTotal = m_commands.size();
 
 	// Start
@@ -109,6 +111,8 @@ inline int DeltaMake::CWorkerPool::Start(size_t nWorkers) {
 
 	for (size_t i = 0; i < nWorkers; ++i)
 		m_threads.push_back(std::thread(&CWorkerPool::WorkerLoop, this, i));
+	
+    m_condition.notify_all();
 	
 	// Wait
 	const size_t messageSize = DELTAMAKE_MAX_WORKER_TITLE + 4; // "[ ] "
@@ -128,13 +132,13 @@ inline int DeltaMake::CWorkerPool::Start(size_t nWorkers) {
 		offestUp = 0;
 
 		// Workers
-		bool bAllReady = true;
+		size_t nReady = 0;
 		for (size_t iWorker = 0; iWorker < nWorkers; ++iWorker) {
 			SWorker& worker = m_workers[iWorker];
 
-			bAllReady = bAllReady && (worker.bRunning == false);
 			if (worker.bRunning == false) {
 				terminal->Log(LOG_INFO, "[#] %-*s", DELTAMAKE_MAX_WORKER_TITLE, "");
+				++nReady;
 			}
 			else {
 				std::lock_guard<std::mutex> lock(worker.mutex);
@@ -151,12 +155,13 @@ inline int DeltaMake::CWorkerPool::Start(size_t nWorkers) {
 
 		// Status
 		{
-			std::lock_guard<std::mutex> lock(m_commandsMutex);
-			terminal->Log(LOG_INFO, "\n[%3i/%3i] Compiling...", nTotal - m_commands.size(), nTotal);
+			//std::lock_guard<std::mutex> lock(m_commandsMutex);
+			const size_t nExecuted = m_nExecuted;
+			terminal->Log(LOG_INFO, "\n[%3i/%3i] Compiling...", nExecuted, nTotal);
 		}
 		++offestUp;
 
-		if (bAllReady == true)
+		if (nReady == nWorkers)
 			break;
 	}
 	
@@ -194,22 +199,23 @@ inline void DeltaMake::CWorkerPool::Stop() {
  */
 inline void DeltaMake::CWorkerPool::WorkerLoop(size_t index) {
 	SWorker& data = m_workers[index];
-
-	data.bRunning = true;
-
 	while (true) {
-		std::unique_lock<std::mutex> lock(m_commandsMutex);
-		m_condition.wait(lock, [this] {
-			return (m_commands.empty() == false) || (m_bRunning == true);
-		});
+		{
+			std::unique_lock<std::mutex> lock(m_commandsMutex);
+			m_condition.wait(lock, [this] {
+				return (m_commands.empty() == false) || (m_bRunning == true);
+			});
 
-		if ((m_bRunning == false) || (m_commands.empty() == true))
-			break;
+			if ((m_bRunning == false) || (m_commands.empty() == true))
+				break;
 
-		data.command = m_commands.front();
-		m_commands.pop();
+			//std::lock_guard<std::mutex> lock(data.mutex);
+			data.command = m_commands.front();
+			m_commands.pop();
+		}
 
 		terminal->ExecSystem(data.command.command.c_str());
+		++m_nExecuted;
     }
 	
 	data.bRunning = false;
