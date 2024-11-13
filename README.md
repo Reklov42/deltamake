@@ -1,5 +1,5 @@
 > [!CAUTION]
-> Node.JS implenestation is deprecated and no longer supported
+> Node.JS implementation (v2.1.0) is deprecated and no longer supported
 
 # DeltaMake
 
