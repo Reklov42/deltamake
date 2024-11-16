@@ -41,7 +41,7 @@ Enable verbose logging
 
 `-s --scan`
 
-Scan `scanPath` for files with specified extensions
+Scan `paths.scan` for files with specified extensions
 
 `-w <count> --workers <count>`
 
@@ -96,28 +96,28 @@ Stores differential data between builds, so just `.gitignore` it
 
 ### `builds.<name>` structure
 
-| Name                | Values                   | Description                   |
-|:------------------- |:------------------------ |:----------------------------- |
-| `.type`             | `exec`, if not specified | [Build types](#build-types)   |
-| `.paths.include`    |                          | List of `include` paths       |
-| `.paths.lib`        |                          | List of paths to libraries    |
-| `.defines`          |                          | List of global defines names  |
-| `.compiler`         | `g++`, If not specified  | Used compiler                 |
-| `.compilerFlags`    |                          | String of flags for compiler  |
-| `.staticLibs`       |                          | List of static library names  |
-| `.outname`          |                          | Name of output build          |
-| `.pre`              |                          | Pre build shell command       |
-| `.post`             |                          | Post build shell command      |
-| `.solutions.<name>` |                          | List of subsolution codenames |
+| Name                | Values                   | Description                                   |
+|:------------------- |:------------------------ |:--------------------------------------------- |
+| `.type`             | `exec`, if not specified | [Build types](#build-types)                   |
+| `.paths.include`    |                          | List of `include` paths                       |
+| `.paths.lib`        |                          | List of paths to libraries                    |
+| `.defines`          |                          | List of global defines names                  |
+| `.compiler`         | `g++`, if not specified  | Used compiler                                 |
+| `.compilerFlags`    |                          | String of flags for compiler                  |
+| `.staticLibs`       |                          | List of static library names                  |
+| `.outname`          |                          | Name of output build                          |
+| `.pre`              |                          | Pre build shell command                       |
+| `.post`             |                          | Post build shell command                      |
+| `.solutions.<name>` | `out`, if not specified  | List of subsolution codenames                 |
 
 ### `builds.<name>.solutions.<name>` structure
 
-| Name        | Values                      | Description             |
-|:----------- |:--------------------------- |:----------------------- |
-| `.build`    | `default`, If not specified | Subsolution build name  |
-| `.defines`  |                             | Override all defines    |
+| Name        | Values                      | Description              |
+|:----------- |:--------------------------- |:------------------------ |
+| `.build`    | `default`, If not specified | Subsolution build name   |
+<!--| `.defines`  |                             | Override all defines    |
 | `.+defines` |                             | Additional defines      |
-| `.-defines` |                             | Remove selected defines |
+| `.-defines` |                             | Remove selected defines |-->
 
 ## Solution types
 

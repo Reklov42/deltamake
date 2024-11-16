@@ -8,12 +8,13 @@
 #define __DELTAMAKE_H__
 
 #include <stddef.h>
+#include <signal.h>
 
 #include <string>
 
 #define DELTAMAKE_VERSION_MAJOR			3
-#define DELTAMAKE_VERSION_MINOR			0
-#define DELTAMAKE_VERSION_PATCH			1
+#define DELTAMAKE_VERSION_MINOR			1
+#define DELTAMAKE_VERSION_PATCH			2
 
 #define DELTAMAKE_CONFIG_FILENAME		"solution.json"
 #define DELTAMAKE_DIFF_FILENAME			"deltamake.json"
@@ -54,8 +55,10 @@ namespace DeltaMake {
 
 			/**
 			 * Generate command list for workers
+			 * 
+			 * \returns number of commands to execute
 			 */
-			virtual bool				Build(IWorkerPool* pool)				= 0;
+			virtual size_t				Build(IWorkerPool* pool)				= 0;
 
 			/**
 			 * Link all fancy stuff and do some magic of the End
@@ -89,18 +92,40 @@ namespace DeltaMake {
 			virtual IBuild*				GenBuild(const char build[]) 			= 0;
 
 			/**
-			 * Load difference file
+			 * Load differential file
 			 */
-			//virtual bool				LoadDiff(const char path[])				= 0;
+			virtual bool				LoadDiff(const char path[])				= 0;
 
 			/**
-			 * Save difference file
+			 * Save differential file
 			 */
-			//virtual bool				SaveDiff(const char path[])				= 0;
+			virtual bool				SaveDiff(const char path[])				= 0;
 
 		protected:
 			virtual						~ISolution()							= default;
 	};
+
+	/**
+	 * Global config
+	 */
+	struct SConfig {
+		ISolution*						root;
+
+		std::vector<const char*>		builds;
+
+		struct sigaction				oldHandler;
+
+		bool							bVerbose								= false;
+		bool							bNoBuild								= false;
+		bool							bScan									= false;
+		bool							bForce									= false;
+		bool							bDontSaveDiff							= false;
+
+		size_t							nMaxWorkers								= 0;
+		size_t							nCores									= 1;
+	};
+
+	extern SConfig* const config;
 
 	/**
 	 * Log level
@@ -133,6 +158,7 @@ namespace DeltaMake {
 			virtual size_t				GetRows() const							= 0;
 
 			virtual int					ExecSystem(const char cmd[])			= 0;
+			virtual time_t				GetLastModificationTime(const char path[]) = 0;
 		
 		protected:
 			virtual						~ITerminal()							= default;

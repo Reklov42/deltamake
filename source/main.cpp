@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include <signal.h>
 
 #include <vector>
 #include <map>
@@ -23,27 +22,13 @@ using namespace DeltaMake;
 
 // ******************************************************************************** //
 
+DeltaMake::SConfig g_config;
+extern DeltaMake::SConfig* const DeltaMake::config = &g_config;
+
+CWorkerPool g_pool;
+
+// ******************************************************************************** //
 										//										//
-/**
- * Global config
- */
-struct SConfig {
-	ISolution*							root;
-	CWorkerPool							pool;
-
-	std::vector<const char*>			builds;
-
-	struct sigaction					oldHandler;
-
-	bool								bVerbose								= false;
-	bool								bNoBuild								= false;
-	bool								bScan									= false;
-	bool								bForce									= false;
-
-	size_t								nMaxWorkers								= 0;
-	size_t								nCores									= 1;
-} config;
-
 
 /**
  * Input argument stream-like wrapper
@@ -87,6 +72,7 @@ class CTerminalLocal final : public DeltaMake::ITerminal {
 		virtual size_t					GetRows() const override;
 
 		virtual int						ExecSystem(const char cmd[]) override;
+		virtual time_t					GetLastModificationTime(const char path[]) override;
 
 	private:
 		size_t							m_nColumns;
@@ -147,8 +133,8 @@ int main(int argc, char* argv[]) {
 
 	// Loading
 	try {
-		config.root = ISolution::Load(DELTAMAKE_CONFIG_FILENAME);
-		if (config.root == nullptr)
+		g_config.root = ISolution::Load(DELTAMAKE_CONFIG_FILENAME);
+		if (g_config.root == nullptr)
 			return EXIT_FAILURE;
 	}
 	catch (const DeltaMake::CConfigValueNotSet& error) {
@@ -164,36 +150,44 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	if (config.bScan == true) {
-		if (config.root->ScanFolders() == false)
+	if (g_config.bScan == true) {
+		if (g_config.root->ScanFolders() == false)
 			return EXIT_FAILURE;
 	}
 
 
 	// Building
-	if (config.bNoBuild == true)
+	if (g_config.bNoBuild == true)
 		return EXIT_SUCCESS;
 
-	if (config.builds.size() == 0) {
+	if (g_config.bForce == false)
+		g_config.root->LoadDiff(DELTAMAKE_DIFF_FILENAME);
+
+	if (g_config.builds.size() == 0) {
 		terminal->Log(LOG_DETAIL, "No builds setted. Default value is used\n");
-		config.builds.push_back("default");
+		g_config.builds.push_back("default");
 	}
 
 	terminal->Log(LOG_DETAIL, "Selected builds:\n");
-	std::vector<DeltaMake::IBuild*> builders(config.builds.size());
-	for (size_t i = 0; i < config.builds.size(); ++i) {
-		builders[i] = config.root->GenBuild(config.builds[i]);
+	std::vector<DeltaMake::IBuild*> builders(g_config.builds.size());
+	for (size_t i = 0; i < g_config.builds.size(); ++i) {
+		builders[i] = g_config.root->GenBuild(g_config.builds[i]);
 		if (builders[i] == nullptr) {
-			terminal->Log(LOG_ERROR, "Build not found: \"%s\"\n", config.builds[i]);
+			terminal->Log(LOG_ERROR, "Build not found: \"%s\"\n", g_config.builds[i]);
 			return EXIT_FAILURE;
 		}
 
-		terminal->Log(LOG_DETAIL, "\t\"%s\"\n", config.builds[i]);
+		terminal->Log(LOG_DETAIL, "\t\"%s\"\n", g_config.builds[i]);
 	}
-		
-	for (size_t i = 0; i < config.builds.size(); ++i) {
+
+	for (size_t i = 0; i < g_config.builds.size(); ++i) {
 		builders[i]->PreBuild();
-		builders[i]->Build(&config.pool);
+		builders[i]->Build(&g_pool);
+	}
+
+	if (g_pool.Size() == 0) {
+		terminal->Log(LOG_INFO, "Nothing to do.\n");
+		return EXIT_SUCCESS;
 	}
 
 	// DANGER: THREADS!
@@ -204,13 +198,18 @@ int main(int argc, char* argv[]) {
 		sigemptyset(&intHandler.sa_mask);
 		intHandler.sa_flags = 0;
 
-		sigaction(SIGINT, &intHandler, &config.oldHandler);
+		sigaction(SIGINT, &intHandler, &g_config.oldHandler);
 
-		config.pool.Start(config.nMaxWorkers);
+		g_pool.Start(g_config.nMaxWorkers);
 	}
 
-	for (size_t i = 0; i < config.builds.size(); ++i)
+	for (size_t i = 0; i < g_config.builds.size(); ++i)
 		builders[i]->PostBuild();
+
+	if (g_config.bDontSaveDiff == false)
+		g_config.root->SaveDiff(DELTAMAKE_DIFF_FILENAME);
+
+	terminal->Log(LOG_INFO, "Done.\n");
 
 	return EXIT_SUCCESS;
 }
@@ -239,17 +238,21 @@ void ParseArgs(CArgStream&& stream) {
 		const char* arg = stream.GetCurret();
 		if (arg[0] == '-') {
 			if (CheckArg(arg, "verbose"))
-				config.bVerbose = true;
+				g_config.bVerbose = true;
 			else if (CheckArg(arg, "no-build"))
-				config.bNoBuild = true;
+				g_config.bNoBuild = true;
+			else if (CheckArg(arg, "force"))
+				g_config.bForce = true;
+			else if (CheckArg(arg, "dont-save-diff"))
+				g_config.bDontSaveDiff = true;
 			else if (CheckArg(arg, "workers")) {
 				if (stream.GetNext() == nullptr) {
 					PrintHelp();
 					exit(EXIT_SUCCESS);
 				}
 
-				config.nMaxWorkers = static_cast<size_t>(atoll(stream.GetCurret()));
-				config.nMaxWorkers = (config.nMaxWorkers == 0) ? 1 : config.nMaxWorkers;
+				g_config.nMaxWorkers = static_cast<size_t>(atoll(stream.GetCurret()));
+				g_config.nMaxWorkers = (g_config.nMaxWorkers == 0) ? 1 : g_config.nMaxWorkers;
 			}
 			else if (CheckArg(arg, "help"))
 				PrintHelp();
@@ -259,7 +262,7 @@ void ParseArgs(CArgStream&& stream) {
 			}
 		}
 		else {
-			config.builds.push_back(arg);
+			g_config.builds.push_back(arg);
 		}
 	}
 }
@@ -267,21 +270,23 @@ void ParseArgs(CArgStream&& stream) {
 /* ****************************************
  * PrintHelp
  */
-void PrintHelp() { // TODO: force
+void PrintHelp() {
 	const char help[] = \
 		"Usage:\n" \
 		"    deltamake [flags] [build1, build2, ...]\n" \
 		"Note:\n" \
 		"    If build names are not specified, the \"default\" build name will be used.\n" \
 		"flags:\n" \
-		"    -h --help\n" \
-		"        Show this help text\n" \
-		"    -v --verbose\n" \
-		"        Enable verbose logging\n" \
+		"    -d --dont-save-diff\n" \
+		"        Don't save differential file\n" \
 		"    -f --force\n" \
 		"        Force rebuild all solutions (ignore all pre-builds)\n" \
+		"    -h --help\n" \
+		"        Show this help text\n" \
 		"    -n --no-build\n" \
-		"        Don't build anything (useful with scan flag)\n";
+		"        Don't build anything (useful with scan flag)\n" \
+		"    -v --verbose\n" \
+		"        Enable verbose logging\n" \
 		"    -w <count> --workers <count>\n" \
 		"        Max number of workers\n";
 
@@ -335,26 +340,26 @@ void Init() {
 	terminal->Log(LOG_DETAIL, "Terminal: %zux%zu\n", terminal->GetColumns(), terminal->GetRows());
 
 	//
-	config.nCores = static_cast<size_t>(std::thread::hardware_concurrency());
-	config.nCores = (config.nCores == 0) ? 1 : config.nCores;
-	terminal->Log(LOG_DETAIL, "CPU Cores:   %zu\n", config.nCores);
+	g_config.nCores = static_cast<size_t>(std::thread::hardware_concurrency());
+	g_config.nCores = (g_config.nCores == 0) ? 1 : g_config.nCores;
+	terminal->Log(LOG_DETAIL, "CPU Cores:   %zu\n", g_config.nCores);
 
-	if (config.nMaxWorkers == 0)
-		config.nMaxWorkers = config.nCores;
+	if (g_config.nMaxWorkers == 0)
+		g_config.nMaxWorkers = g_config.nCores;
 	
-	terminal->Log(LOG_DETAIL, "CPU Workers: %zu\n", config.nCores);
+	terminal->Log(LOG_DETAIL, "CPU Workers: %zu\n", g_config.nCores);
 }
 
 /* ****************************************
  * Init
  */
 void IntHandler(int signal) {
-	sigaction(SIGINT, &config.oldHandler, NULL);
+	sigaction(SIGINT, &g_config.oldHandler, NULL);
 
 	terminal->ShowCursor(true);
 	terminal->Log(LOG_ERROR, "\n\n\n\n\nCaught signal: %i\nStopping workers... ", signal);
 
-	config.pool.Stop();
+	g_pool.Stop();
 	terminal->Log(LOG_ERROR, "\nDone. Exit\n");
 
 	exit(EXIT_FAILURE);
@@ -364,8 +369,8 @@ void IntHandler(int signal) {
 
 #if defined(__linux__)
 #include <sys/ioctl.h>
-#include <stdio.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 /* ****************************************
  * CTerminalLocal::Init
@@ -424,7 +429,7 @@ void CTerminalLocal::ShowCursor(bool bShow) {
  * CTerminalLocal::Log
  */
 int CTerminalLocal::Log(ELogLevel level, const char format[], ...) {
-	if ((level == ELogLevel::LOG_DETAIL) && (config.bVerbose == false))
+	if ((level == ELogLevel::LOG_DETAIL) && (g_config.bVerbose == false))
 		return 0;
 
 	FILE* const out = (level == ELogLevel::LOG_ERROR) ? stderr : stdout;
@@ -460,6 +465,16 @@ int CTerminalLocal::ExecSystem(const char cmd[]) {
 		exit(EXIT_FAILURE);
 
 	return status;
+}
+
+/* ****************************************
+ * CTerminalLocal::GetLastModificationTime
+ */
+time_t CTerminalLocal::GetLastModificationTime(const char path[]) {
+	struct stat stats;
+	stat(path, &stats);
+	
+	return stats.st_mtime;
 }
 
 #endif

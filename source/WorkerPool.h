@@ -36,7 +36,7 @@ namespace DeltaMake {
 	 * Worker data
 	 */
 	struct SWorker {
-		std::mutex						mutex;
+		//std::mutex						mutex;
 		SCommand						command;
 		std::atomic_bool				bRunning								= true;
 	};
@@ -53,13 +53,15 @@ namespace DeltaMake {
 			int							Start(size_t nWorkers);
 			void						Stop();
 
+			size_t						Size() const;
+
 		private:
 			void						WorkerLoop(size_t index);
 
 
 			bool						m_bRunning								= false;
 
-			std::mutex					m_commandsMutex;
+			mutable std::mutex			m_commandsMutex;
 			std::condition_variable		m_condition;
 
 			SWorker*					m_workers;
@@ -137,12 +139,23 @@ inline int DeltaMake::CWorkerPool::Start(size_t nWorkers) {
 			SWorker& worker = m_workers[iWorker];
 
 			if (worker.bRunning == false) {
-				terminal->Log(LOG_INFO, "[#] %-*s", DELTAMAKE_MAX_WORKER_TITLE, "");
+				terminal->Log(LOG_INFO, "[#] %-*s", DELTAMAKE_MAX_WORKER_TITLE, " ");
 				++nReady;
 			}
 			else {
-				std::lock_guard<std::mutex> lock(worker.mutex);
-				terminal->Log(LOG_INFO, "[%c] %-*s", spinner[spinnerIndex], DELTAMAKE_MAX_WORKER_TITLE, worker.command.title);
+				char title[DELTAMAKE_MAX_WORKER_TITLE] = " ";
+
+				{
+					//std::lock_guard<std::mutex> lock(worker.mutex);
+					strncpy(title, worker.command.title, DELTAMAKE_MAX_WORKER_TITLE - 1);
+				}
+
+				if (isprint(title[0]) == 0) { // Fix trash in buffer
+					title[0] = ' ';
+					title[1] = '\0';
+				}
+				
+				terminal->Log(LOG_INFO, "[%c] %-*s", spinner[spinnerIndex], DELTAMAKE_MAX_WORKER_TITLE, title);
 			}
 
 			nCh += messageSize;
@@ -192,6 +205,14 @@ inline void DeltaMake::CWorkerPool::Stop() {
 	for (size_t i = 0; i < m_threads.size(); ++i) {
 		m_threads[i].join();
     }
+}
+
+/* ****************************************
+ * DeltaMake::CWorkerPool::Size
+ */
+inline size_t DeltaMake::CWorkerPool::Size() const {
+	std::lock_guard<std::mutex> lock(m_commandsMutex);
+	return m_commands.size();
 }
 
 /* ****************************************
