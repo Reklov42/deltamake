@@ -436,7 +436,7 @@ int CTerminalLocal::Log(ELogLevel level, const char format[], ...) {
 
 	switch (level) {
 		case ELogLevel::LOG_ERROR:		fputs("\033[0;31m", out); break; // Red
-		case ELogLevel::LOG_WARNING:	fputs("\033[0;31m", out); break; // Yellow
+		case ELogLevel::LOG_WARNING:	fputs("\033[0;33m", out); break; // Yellow
 		case ELogLevel::LOG_DETAIL:		fputs("\033[0;36m", out); break; // Cyan
 	
 		default:						fputs("\033[0m", out); break; // Reset

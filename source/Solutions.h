@@ -241,8 +241,9 @@ DeltaMake::CSolutionDefault::CSolutionDefault(Json::Value root, std::filesystem:
 			file.path = m_currentPath / relativePath.c_str();
 
 			if (std::filesystem::exists(file.path) == false) {
-				terminal->Log(LOG_ERROR, "File \"%s\" does not exists!..\n", file.path.c_str());
-				throw CFileNotExists(file.path.c_str());
+				terminal->Log(LOG_WARNING, "File \"%s\" does not exists!..\n", file.path.c_str());
+				//throw CFileNotExists(file.path.c_str());
+				continue; // TODO: rewrite solution
 			}
 
 			file.mtime = terminal->GetLastModificationTime(file.path.c_str());
