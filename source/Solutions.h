@@ -518,6 +518,12 @@ inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
 		terminal->Log(LOG_DETAIL, "No diff data. Ignoring...\n");
 		diff = Json::Value(Json::objectValue);
 	}
+	
+	Json::Value& buildDiff = diff[m_name];
+	if (buildDiff.isObject() == false) {
+		terminal->Log(LOG_DETAIL, "No build diff data. Ignoring...\n");
+		buildDiff = Json::Value(Json::objectValue);
+	}
 
 	size_t nToExecute = 0;
 	terminal->Log(LOG_DETAIL, "Commands:\n");
@@ -527,9 +533,9 @@ inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
 		const std::filesystem::path outPath = m_solution->m_tmpPath / (m_name + "_" + stem);
 		m_objects.push_back(outPath);
 
-		const Json::Value& fileTime = diff[iterator->first];
+		const Json::Value& fileTime = buildDiff[iterator->first];
 		if (fileTime.isNumeric() == true) {
-			time_t lastTime = static_cast<time_t>(diff[iterator->first].asLargestInt());
+			time_t lastTime = static_cast<time_t>(buildDiff[iterator->first].asLargestInt());
 			if (lastTime >= file.mtime) {
 				continue;
 			}
@@ -538,7 +544,7 @@ inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
 		m_bLink = true;
 		
 		++nToExecute;
-		diff[iterator->first] = file.mtime;
+		buildDiff[iterator->first] = file.mtime;
 
 		size_t size = strlen(stem);
 		size = (size > DELTAMAKE_MAX_WORKER_TITLE - 1) ? DELTAMAKE_MAX_WORKER_TITLE - 1 : size;
