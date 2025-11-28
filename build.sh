@@ -37,10 +37,28 @@ CommitHash=$(git rev-parse --short HEAD)
 echo -e "Commit hash: "$CBlue$CommitHash$CReset
 echo -e "#define DELTAMAKE_COMMIT_HASH \""$CommitHash"\"\n" >> $AutoGenPath
 
+# Load plugins
+echo "// Plugins" >> $AutoGenPath
+for filename in ./source/plugins/*"$1".h; do
+	name="${filename#*/*/}"
+    echo -e "#include \""$name"\"" >> $AutoGenPath
+done
+
+echo -e "\nvoid LoadPlugins() {" >> $AutoGenPath
+echo "Plugins:"
+for filename in ./source/plugins/*"$1".h; do
+    name="${filename##*/}"
+    name="${name%*$1.h}"
+    echo -e "\t"$CYellow$name$CReset
+    echo -e "\tRegisterPlugin(C"$name"::GetInstance());" >> $AutoGenPath
+done
+echo "}" >> $AutoGenPath
+
 # Building
 echo -e "Building "$CGreen"deltamake"$CReset"..."
-g++ --std=c++17 -g -ljsoncpp -I./source/ ./source/main.cpp -o deltamake
+g++ --std=c++17 -g -ljsoncpp -I./source/ ./source/*.cpp ./source/plugins/*.cpp -o deltamake
 chmod +x ./deltamake
+
 # Done
 echo -e "AND NOW... "$CRed"BEWARE OF\n\n"$CReset
 ./deltamake -n -v
