@@ -297,26 +297,6 @@ ITaskList* CSchedulerLocal::GetList() {
  * CSchedulerLocal::Start
  */
 void CSchedulerLocal::Start() {
-	/*
-	for (size_t i = 0; i < 10; ++i) {
-		char buff[128];
-		sprintf(buff, "Task A: %i", static_cast<int>(i));
-
-		AddCommand(buff, "echo \"hello A\nX\nV\"; sleep 1");
-	}
-
-	AddBarrier();
-
-	for (size_t i = 0; i < 10; ++i) {
-		char buff[128];
-		sprintf(buff, "Task B: %i", static_cast<int>(i));
-
-		if (i % 8 == 0)
-			AddBarrier();
-
-		AddCommand(buff, "echo \"hello B\"; gcc");
-	}*/
-
 	if (m_tasks.size() == 0) {
 		terminal->Log(LOG_WARNING, "Scheduler task list is empty! Abort start.\n");
 		return;
