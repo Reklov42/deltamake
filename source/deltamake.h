@@ -11,36 +11,32 @@
 #include <signal.h>
 
 #include <string>
+#include <vector>
+#include <filesystem>
+
+#include <json/json.h>
+
 
 #define DELTAMAKE_VERSION_MAJOR			3
-#define DELTAMAKE_VERSION_MINOR			1
-#define DELTAMAKE_VERSION_PATCH			2
+#define DELTAMAKE_VERSION_MINOR			5
+#define DELTAMAKE_VERSION_PATCH			1
 
 #define DELTAMAKE_CONFIG_FILENAME		"solution.json"
 #define DELTAMAKE_DIFF_FILENAME			"deltamake.json"
 
-#define DELTAMAKE_MAX_WORKER_TITLE		32
- 
+#define DELTAMAKE_MIN_WORKER_TITLE		32
+#define DELTAMAKE_SCHEDULER_DELAY		80 // ms
+#define DELTAMAKE_BARRIER_DELAY			10 // ms
+
+#define DELTAMAKE_BARRIER_TITLE			"-= BARRIER =-"
+
+#define DELTAMAKE_POLL_BUFFER_SIZE		512
+
+
 // ******************************************************************************** //
 
 										//										//
 namespace DeltaMake {
-	/**
-	 * Thread pool interface
-	 */
-	class IWorkerPool {
-		public:
-			IWorkerPool&				operator=(const IWorkerPool&)			= delete;
-
-			/**
-			 * Add command to queue
-			 */
-			virtual bool				AddCommand(const std::string& command, const char title[]) = 0;
-
-		protected:
-			virtual						~IWorkerPool()							= default;
-	};
-
 	/**
 	 * Build basic interface
 	 */
@@ -54,11 +50,11 @@ namespace DeltaMake {
 			virtual bool				PreBuild()								= 0;
 
 			/**
-			 * Generate command list for workers
+			 * Generate command task list
 			 * 
-			 * \returns number of commands to execute
+			 * \returns Number of commands to execute
 			 */
-			virtual size_t				Build(IWorkerPool* pool)				= 0;
+			virtual size_t				Build(class ITaskList* taskList)		= 0;
 
 			/**
 			 * Link all fancy stuff and do some magic of the End
@@ -70,6 +66,19 @@ namespace DeltaMake {
 	};
 
 	/**
+	 * Build plugin factory (allocator) basic interface
+	 *//* TODO: ?
+	class IBuildFactory {
+		public:
+			IBuildFactory&				operator=(const IBuildFactory&)		= delete;
+
+			virtual IBuildFactory*		NewBuild(...) const = 0;
+		protected:
+			virtual						~IBuildFactory()						= default;
+	};*/
+
+
+	/**
 	 * Solution basic interface
 	 */
 	class ISolution {
@@ -77,7 +86,7 @@ namespace DeltaMake {
 			ISolution&					operator=(const ISolution&)				= delete;
 
 			/**
-			 * Fabric with `version` and `type` check
+			 * Factory with `version` and `type` check
 			 */
 			static ISolution*			Load(const char path[]);
 
@@ -106,14 +115,62 @@ namespace DeltaMake {
 	};
 
 	/**
+	 * Plugin type
+	 */
+	enum class EPluginType {
+		SOLUTION,
+		BUILD,
+	};
+
+	/**
+	 * Iternal plugin interface
+	 */
+	class IPlugin {
+		public:
+			IPlugin&					operator=(const IPlugin&)				= delete;
+
+			/**
+			 * Do some magic of the Begin
+			 */
+			virtual EPluginType			GetType() const							= 0;
+
+		protected:
+			virtual						~IPlugin()								= default;
+
+	};
+
+	/**
+	 * Solution plugin factory (allocator) basic interface
+	 */
+	class ISolutionFactory : public IPlugin {
+		public:
+			ISolutionFactory&			operator=(const ISolutionFactory&)		= delete;
+
+			virtual EPluginType			GetType() const override final			{ return EPluginType::SOLUTION; }
+
+			/**
+			 * \return Solution `type` name
+			 */
+			virtual const std::string&	GetName() const							= 0;
+
+			/**
+			 * \returns newly allocated solution
+			 */
+			virtual ISolution*			NewSolution(Json::Value& root, std::filesystem::path& currentPath) = 0;
+		protected:
+			virtual						~ISolutionFactory()						= default;
+	};
+
+
+	/**
 	 * Global config
 	 */
 	struct SConfig {
 		ISolution*						root;
 
 		std::vector<const char*>		builds;
-
-		struct sigaction				oldHandler;
+		std::map<std::string, ISolutionFactory*> solutionTypes;
+		//std::vector<std::string, IBuildFactory*> buildTypes;
 
 		bool							bVerbose								= false;
 		bool							bNoBuild								= false;
@@ -126,45 +183,6 @@ namespace DeltaMake {
 	};
 
 	extern SConfig* const config;
-
-	/**
-	 * Log level
-	 */
-	enum ELogLevel {
-		LOG_INFO,						/* Default */
-		LOG_DETAIL,						/* With `-v` flag */
-		LOG_WARNING,					/* Yellow */
-		LOG_ERROR,						/* Red */
-	};
-	
-	/**
-	 * Terminal wrapper
-	 */
-	class ITerminal {
-		public:
-			ITerminal&					operator=(const ITerminal&)				= delete;
-
-			virtual void				MoveUp(size_t offset)					= 0;
-			virtual void				MoveDown(size_t offset)					= 0;
-			virtual void				MoveRight(size_t offset)				= 0;
-			virtual void				MoveLeft(size_t offset)					= 0;
-
-			virtual void				Flush()									= 0;
-			virtual void				ShowCursor(bool bShow)					= 0;
-
-			virtual int					Log(ELogLevel level, const char format[], ...) = 0;
-
-			virtual size_t				GetColumns() const						= 0;
-			virtual size_t				GetRows() const							= 0;
-
-			virtual int					ExecSystem(const char cmd[])			= 0;
-			virtual time_t				GetLastModificationTime(const char path[]) = 0;
-		
-		protected:
-			virtual						~ITerminal()							= default;
-	};
-
-	extern ITerminal* const terminal;
 }
 
 #endif /* !__DELTA_MAKE_H__ */
