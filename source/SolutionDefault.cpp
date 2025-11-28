@@ -1,11 +1,10 @@
 /**
- * \file	Solutions.h
+ * \file	SolutionDefault.cpp
  * \brief	DeltaMake default solutions
  * \date	27 oct 2024
  * \author	Reklov
  */
-#ifndef __DELTAMAKE_SOLUTIONS_H__
-#define __DELTAMAKE_SOLUTIONS_H__
+#include "SolutionDefault.h"
 
 #include <stddef.h>
 
@@ -19,111 +18,12 @@
 #include <json/json.h>
 
 #include "deltamake.h"
+#include "Terminal.h"
 #include "Exception.h"
  
 // ******************************************************************************** //
 
 										//										//
-namespace DeltaMake {
-	/**
-	 * Source code file
-	 */
-	struct SSourceFile {
-		std::filesystem::path			path;
-		time_t							mtime; /* Last modification time in diff file */
-		bool							bToCompile;
-	};
-
-	/**
-	 * Default solution
-	 */
-	class CSolutionDefault : public ISolution {
-		public:
-										CSolutionDefault(Json::Value root, std::filesystem::path currentPath);
-			virtual						~CSolutionDefault() override			= default;
-
-			virtual bool				ScanFolders() override;
-
-			virtual IBuild*				GenBuild(const char build[]) override;
-
-			virtual bool				LoadDiff(const char path[]) override;
-			virtual bool				SaveDiff(const char path[]) override;
-		protected:
-			friend class CBuild;
-
-			const std::filesystem::path m_currentPath;
-
-			Json::Value					m_diffFile								= Json::Value(Json::nullValue);
-
-			std::vector<std::filesystem::path> m_sourcePaths;
-			std::filesystem::path		m_buildPath;
-			std::filesystem::path		m_tmpPath;
-
-			std::map<Json::String, SSourceFile>	m_sources;
-			std::map<Json::String, Json::String> m_subSolutions;
-			std::map<Json::String, Json::Value> m_builds;
-	};
-
-
-	/**
-	 * C/C++ header file state
-	 */
-	struct SHeaderFile {
-		std::vector<SSourceFile*>		files;
-		time_t							mtime;
-	};
-
-	/**
-	 * Solution for C/C++ projects
-	 */
-	class CSolutionCPP : public CSolutionDefault {
-		public:
-										CSolutionCPP(Json::Value root, std::filesystem::path currentPath);
-			virtual						~CSolutionCPP() override				= default;
-
-			virtual bool				ScanFolders() override;
-			virtual bool				ScanHeaders();
-
-		protected:
-
-			std::map<Json::String, SHeaderFile> m_headers;
-
-	};
-
-
-	/**
-	 * Sub Solution
-	 */
-	struct SSubSolution {
-		CSolutionDefault*				solution;
-		IBuild*							build;
-		std::filesystem::path			path;
-	};
-
-	/**
-	 * Default build implementation
-	 */
-	class CBuild : public IBuild {
-		public:
-										CBuild(CSolutionDefault* solution, const Json::Value& build, std::string name);
-			virtual						~CBuild()								= default;
-
-			virtual bool				PreBuild() override;
-			virtual size_t				Build(IWorkerPool* pool) override;
-			virtual bool				PostBuild() override;
-
-		protected:
-			bool						m_bLink									= false;
-
-			const std::string			m_name;
-			Json::Value					m_build;
-			CSolutionDefault*			m_solution;
-
-			std::vector<SSubSolution>	m_subs;
-
-			std::vector<std::filesystem::path> m_objects;
-	};
-}
 
 // ******************************************************************************** //
 
@@ -149,7 +49,7 @@ inline DeltaMake::ISolution* DeltaMake::ISolution::Load(const char path[]) {
 	// Version
 	const Json::Value& version = root["version"];
 	if (version.isString() == false) {
-		terminal->Log(LOG_ERROR, "Can't get version\n", path);
+		terminal->Log(LOG_ERROR, "Can't get version\n");
 		return nullptr;
 	}
 
@@ -161,8 +61,13 @@ inline DeltaMake::ISolution* DeltaMake::ISolution::Load(const char path[]) {
 		const Json::Value& type = root["type"];
 		terminal->Log(LOG_DETAIL, "Solution type: %s\n", type.asCString());
 
-		if (type == "c/cpp")
-			return new(std::nothrow) CSolutionCPP(root, currentPath);
+		auto iterator = config->solutionTypes.find(type.asCString());
+		if (iterator == config->solutionTypes.end()) {
+			terminal->Log(LOG_ERROR, "Solution type \"%s\" is unknown.\n", type.asCString());
+			return nullptr;
+		}
+
+		return iterator->second->NewSolution(root, currentPath);
 	}
 
 	terminal->Log(LOG_DETAIL, "Solution type is not set. Default value is used.\n");
@@ -342,37 +247,6 @@ inline bool DeltaMake::CSolutionDefault::SaveDiff(const char path[]) {
 // ******************************************************************************** //
 
 /* ****************************************
- * DeltaMake::CSolutionCPP::CSoluCSolutiontionCPP
- */
-DeltaMake::CSolutionCPP::CSolutionCPP(Json::Value root, std::filesystem::path currentPath) : CSolutionDefault(root, currentPath) {
-	Json::Value& ccpp = root["c/cpp"];
-	if (ccpp.isObject() == false) {
-		terminal->Log(LOG_DETAIL, "Config object \"c/cpp\" does not exists. Creating...\n");
-		ccpp = Json::Value(Json::ValueType::objectValue);
-		ccpp["headers"] = Json::Value(Json::ValueType::arrayValue);
-
-		root["c/cpp"] = ccpp;
-		ccpp = root["c/cpp"]; // TODO: Remove?
-	}
-}
-
-/* ****************************************
- * DeltaMake::CSolutionCPP::ScanFolders
- */
-inline bool DeltaMake::CSolutionCPP::ScanFolders() { // TODO:
-	return false;
-}
-
-/* ****************************************
- * DeltaMake::CSolutionCPP::ScanHeaders
- */
-inline bool DeltaMake::CSolutionCPP::ScanHeaders() { // TODO:
-	return false;
-}
-
-// ******************************************************************************** //
-
-/* ****************************************
  * DeltaMake::CBuild::CBuild
  */
 DeltaMake::CBuild::CBuild(CSolutionDefault* solution, const Json::Value& build, std::string name) : m_solution(solution), m_build(build), m_name(name) {
@@ -454,12 +328,12 @@ inline bool DeltaMake::CBuild::PreBuild() {
 /* ****************************************
  * DeltaMake::CBuild::PostBuild
  */
-inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
+inline size_t DeltaMake::CBuild::Build(ITaskList* taskList) {
 	bool bReLink = false; // Relink all objects
 
 	// Subs
 	for (size_t i = 0; i < m_subs.size(); ++i) {
-		if (m_subs[i].build->Build(pool) != 0)
+		if (m_subs[i].build->Build(taskList) != 0)
 			bReLink = true;
 	}
 
@@ -529,7 +403,7 @@ inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
 	terminal->Log(LOG_DETAIL, "Commands:\n");
 	for(auto iterator = m_solution->m_sources.begin(); iterator != m_solution->m_sources.end(); ++iterator) {
 		const SSourceFile& file = iterator->second;
-		const char* stem = file.path.stem().c_str();
+		const std::string stem = std::string(file.path.stem());
 		const std::filesystem::path outPath = m_solution->m_tmpPath / (m_name + "_" + stem);
 		m_objects.push_back(outPath);
 
@@ -545,17 +419,12 @@ inline size_t DeltaMake::CBuild::Build(IWorkerPool* pool) {
 		
 		++nToExecute;
 		buildDiff[iterator->first] = file.mtime;
-
-		size_t size = strlen(stem);
-		size = (size > DELTAMAKE_MAX_WORKER_TITLE - 1) ? DELTAMAKE_MAX_WORKER_TITLE - 1 : size;
-		char title[DELTAMAKE_MAX_WORKER_TITLE] = { 0 };
-		strncpy(title, stem, size);
 		
 		std::string cmd = cmdBegin + "\"" + file.path.c_str() + "\" -o \"" + outPath.c_str() + "\"";
 
 		terminal->Log(LOG_DETAIL, "\t%s\n", cmd.c_str());
 		
-		pool->AddCommand(cmd, title);
+		taskList->AddCommand(stem.c_str(), cmd);
 	}
 
 	return nToExecute;
@@ -650,5 +519,3 @@ inline bool DeltaMake::CBuild::PostBuild() {
 
 	return true;
 }
-
-#endif /* !__DELTAMAKE_SOLUTIONS_H__ */
